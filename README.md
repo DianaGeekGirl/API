@@ -5,7 +5,8 @@ A collection of API development projects and tutorials.
 - 1. [CreatingYourOwnAPI] : REST API basics with Flask & SQLite, SQLAlchemy ORM (https://www.youtube.com/watch?v=qbLc5a9jdXo)
  
 
-### CreatingYourOwnAPI =>What it does:
+### CreatingYourOwnAPI 
+--> What it does:
 CRUD REST API for managing drinks (GET, POST, DELETE endpoints)
 SQLite database with SQLAlchemy ORM
 Returns JSON responses
