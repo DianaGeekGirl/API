@@ -1,0 +1,284 @@
+Creating your own API : https://www.youtube.com/watch?v=qbLc5a9jdXo
+
+## Quick Start
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install flask flask-sqlalchemy
+export FLASK_APP=application.py
+flask shell
+>>> from application import db; db.create_all()
+flask run
+```
+
+
+
+## step 1 : Create a virtual environment
+-> python3 -m venv .venv        //isolate dependencies for this application
+-> source .venv/bin/activate        //activating it 
+
+## step 2 : Install Dependencies
+Flask → A lightweight Python web framework used to build APIs and web applications.
+pip3 install flask
+
+Flask-SQLAlchemy → Integrates SQLAlchemy with Flask to easily connect and manage databases using Python classes.
+pip3 install flask-sqlalchemy
+
+Flask-CORS → Allows your Flask API to be accessed from other domains (enables frontend–backend communication).
+pip3 install flask-cors
+
+## step 3 : Save packages (dependencies that you installed with version) to requirements.txt
+pip freeze     → Lists ALL installed packages + versions
+> requirements.txt  → Saves that list to file
+pip3 freeze > requirements.txt
+
+## step 4 : Create your application
+--> touch application.py
+// write code
+-> imports
+->Creates Flask app instance
+->Route decorator for home
+    -> Function name (can be anything)
+    -> Returns plain text
+
+->Route decorator for /drinks
+    -> Function name
+    -> Return dictionary : {"drinks": ["coffee", "tea", "juice"]}
+# to run
+export FLASK_APP=application.py    # Tells Flask: "Use THIS file"
+export FLASK_ENV=development       # Tells Flask: "Development mode ON"
+flask run                          # ONE LINE starts everything
+
+### Note: Port 5000 is in use by another program. Either identify and stop that program, or start the server with a different port:
+lsof -ti:5000 | xargs kill -9       # Kill everything on port 5000
+flask run --port 5001       #Use Different Port
+### Note: ctrl + c - to quit server 
+
+## step 5 : Connect to DB with ORM(object relation mapper) 
+### Configure Database & Create Model
+# Database configuration
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///drinks.db'       #`SQLALCHEMY_DATABASE_URI` → Points to SQLite database file location
+db = SQLAlchemy(app)
+
+# Define Model (maps Python class to database table)
+```
+class Drink(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(80), unique=True, nullable=False)
+    description = db.Column(db.String(120))
+    
+    def __repr__(self):
+        return f"{self.name}: {self.description}"
+```
+
+## Step 6 : Create Database Tables
+```bash
+->flask shell                        # Opens Python shell with app context
+>>> from application import db
+>>> db.create_all()    # Creates drinks.db file with tables
+>>> drink = Drink(name="Grape Soda", description="Tastes like grapes")       //Add Test Data 
+>>> db.session.add(drink)          # Stage the record
+>>> db.session.commit()            # Save to database
+>>> Drink.query.all()              # Verify
+[Grape Soda: Tastes like grapes]
+>>> db.session.add(Drink(name="cherry", description="Tastes like ice cream")) # Creates a new Drink object and adds it to the session (staging area)
+>>> db.session.commit()
+>>> Drink.query.all()
+[Grape Soda: Tastes like grapes, cherry: Tastes like ice cream]
+# Retrieves all records from database
+>>> exit()
+```
+
+## step 7 : Connect database data to Route decorator /drinks
+### Update /drinks endpoint to fetch from database
+- `Drink.query.all()` → Retrieves all records from database
+- Loop through each drink object
+- Extract `name` and `description` fields into dictionary
+- Add to output list
+- Return JSON response with all drinks
+
+### Test it:
+```bash
+flask run
+```
+Visit: `http://127.0.0.1:5000/drinks`
+
+**Response:**
+```json
+{
+  "drinks": [
+    {"name": "Grape Soda", "description": "Tastes like grapes"},
+    {"name": "cherry", "description": "Tastes like ice cream"}
+  ]
+}
+```
+
+### Note: 
+**Before:** Route returned hardcoded data `["coffee", "tea", "juice"]`  
+**After:** Route returns actual data from `drinks.db` database ✅
+
+
+## step 8 : Pass in id to get specific drink data
+
+### Create dynamic route with ID parameter
+```python
+@app.route('/drinks/<id>')
+def get_drink(id):
+    drink = Drink.query.get_or_404(id)          # Get drink by ID or return 404 error
+```
+### What This Does:
+- `<id>` → Dynamic URL parameter (captures value from URL)
+- `Drink.query.get_or_404(id)` → Fetches drink with matching ID from database
+
+### Test it:
+```bash
+flask run
+```
+
+**Get drink with ID 1:**  
+Visit: `http://127.0.0.1:5000/drinks/1`
+
+**Response:**
+```json
+{
+  "name": "Grape Soda",
+  "description": "Tastes like grapes"
+}
+```
+
+**Get drink with ID 2:**  
+Visit: `http://127.0.0.1:5000/drinks/2`
+
+**Response:**
+```json
+{
+  "name": "cherry",
+  "description": "Tastes like ice cream"
+}
+```
+
+**Invalid ID (e.g., ID 999):**  
+Visit: `http://127.0.0.1:5000/drinks/999`
+
+**Response:**
+```
+404 Not Found
+```
+
+### Note:
+- `get_or_404()` is better than `get()` because it handles errors automatically
+- `get()` would return `None` and crash your app if ID doesn't exist
+
+## step 9 : Create POST endpoint to add new drinks to database
+
+### Add POST route to application.py
+# Add 'request' to imports
+```
+@app.route('/drinks', methods=['POST'])
+def add_drink():
+    drink = Drink(name=request.json['name'], description=request.json['description'])
+    db.session.add(drink)
+    db.session.commit()
+    return {'id': drink.id}
+```
+### What This Does:
+- `methods=['POST']` → Allows POST requests to this endpoint
+- `request.json` → Extracts JSON data from request body
+- Creates new Drink object with name and description from request
+- `db.session.add()` → Stages the new drink
+- `db.session.commit()` → Saves to database
+- Returns the new drink's ID
+
+### Test in Postman:
+
+**Step 1: Set Headers**
+1. In Postman, go to the **Headers** tab
+2. Add this header:
+   - **Key:** `Content-Type`
+   - **Value:** `application/json`
+
+**Step 2: Set Body**
+1. Go to the **Body** tab
+2. Select **raw**
+3. Choose **JSON** from the dropdown (right side)
+4. Enter your JSON data:
+```json
+{
+    "name": "Lemonade",
+    "description": "Fresh and tangy"
+}
+```
+
+**Step 3: Send Request**
+- **Method:** POST
+- **URL:** `http://127.0.0.1:5000/drinks`
+- Click **Send**
+
+**Expected Response:**
+```json
+{
+    "id": 3
+}
+```
+### Note:
+If you get **415 Unsupported Media Type** error, make sure you set the `Content-Type: application/json` header in Postman! ✅
+
+## step 10 : Create DELETE endpoint to remove drinks from database
+
+### Add DELETE route to application.py
+- `methods=['DELETE']` → Allows DELETE requests to this endpoint
+- `<id>` → Captures drink ID from URL
+- `Drink.query.get(id)` → Fetches drink by ID (returns None if not found)
+- Checks if drink exists, returns 404 error if not found
+- `db.session.delete(drink)` → Marks drink for deletion
+- `db.session.commit()` → Removes from database permanently
+- Returns success message
+
+### Test in Postman:
+
+**Step 1: Set Request Method**
+- **Method:** DELETE (select from dropdown)
+- **URL:** `http://127.0.0.1:5000/drinks/3` (replace 3 with ID you want to delete)
+
+**Step 2: Send Request**
+- No headers or body needed for DELETE
+- Click **Send**
+
+**Expected Response (Success):**
+```json
+{
+    "message": "Drink deleted"
+}
+```
+
+**Expected Response (Invalid ID):**
+```json
+{
+    "error": "Drink not found"
+}
+```
+Status: `404 Not Found`
+
+### Verify Deletion:
+```bash
+flask shell
+```
+```python
+>>> from application import Drink
+>>> Drink.query.all()
+[Grape Soda: Tastes like grapes, cherry: Tastes like ice cream]
+# Lemonade (ID 3) is now gone ✅
+```
+
+### Testing Different IDs in Postman:
+- Delete drink with ID 1: `http://127.0.0.1:5000/drinks/1`
+- Delete drink with ID 2: `http://127.0.0.1:5000/drinks/2`
+- Delete drink with ID 999 (doesn't exist): `http://127.0.0.1:5000/drinks/999` → Returns 404 error
+
+### Note:
+DELETE requests don't need a body or special headers - just specify the ID in the URL! ✅
+
+## What is CRUD?
+- **C**reate - POST /drinks
+- **R**ead - GET /drinks, GET /drinks/<id>
+- **U**pdate - (not implemented yet)
+- **D**elete - DELETE /drinks/<id>
